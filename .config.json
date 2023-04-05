@@ -1,0 +1,20 @@
+{
+	"hourlyEvents": [
+		{
+		"slackURL": "/url/for/your/incoming/webhook",
+		"calendarId": "calendarID from Google Calendar Settings",
+		"maxResults": false,
+		"text": "Text to display before listing events",
+		"exclude": "reGex to exclude events titles, separate with | if multiple strings"
+		}
+	],
+	"dailyEvents": [
+		{
+		"slackURL": "/url/for/your/incoming/webhook",
+		"calendarId": "calendarID from Google Calendar Settings",
+		"maxResults": false,
+		"text": "Text to display before listing events",
+		"exclude": "reGex to exclude events titles, separate with | if multiple strings"			
+		}
+	]
+}
