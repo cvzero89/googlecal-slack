@@ -86,11 +86,6 @@ def generate_message(events, text, exclude_list):
     }]
     for event in events:
         title = event['summary']
-        exclude_regex = re.compile(exclude_list)
-        result = exclude_regex.match(title)
-        if result:
-            logging.info('Excluded events based on set RegEx.')
-            continue
         event_url = event['htmlLink']
         start = event['start'].get('dateTime', event['start'].get('date'))
         convert = RFC3339()
@@ -126,12 +121,21 @@ def get_events(loaded_config, max_time):
     events_list = service.events().list(calendarId=calendarId, timeMin=now, timeMax=max_time, maxResults=max_results, singleEvents=True, orderBy='startTime').execute()
     events = events_list.get('items',[])
     exclude_list = loaded_config[0]['exclude']
+    print(f'Received {len(events)} events.')
+    logging.info(f'Received {len(events)} events.')
+    for event in events:
+        current_item = 0
+        title = event['summary']
+        exclude_regex = re.compile(exclude_list)
+        result = exclude_regex.match(title)
+        if result:
+            logging.info('Excluded events based on set RegEx.')
+            events.pop(current_item)
+            print(events)
+        current_item += 1
     if not events:
         logging.info('Could not retrieve events or there are no events at this time.')
         return None
-    else:
-        print(f'Received {len(events)} events.')
-        logging.info(f'Received {len(events)} events.')
     return generate_message(events, text, exclude_list)
 
 def send_command(message, slackURL):
