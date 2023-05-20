@@ -142,12 +142,16 @@ def send_command(message, slackURL):
     if message == None:
         print('No upcoming events found.')
     else:
-        send = requests.post(slackURL, json=message)
-        if send.status_code != 200:
-            raise ValueError(f'Request to Slack returned an error {send.status_code}, the response is:\n{send.text}')
-        else:
-            logging.info(f'Message sent. HTTP code: {send.status_code}.')
-            print(f'Message sent. Server response: {send.text}') 
+        try:
+            send = requests.post(slackURL, json=message)
+            if send.status_code != 200:
+                raise ValueError(f'Request to Slack returned an error {send.status_code}, the response is:\n{send.text}')
+            else:
+                logging.info(f'Message sent. HTTP code: {send.status_code}.')
+                print(f'Message sent. Server response: {send.text}')
+        except:
+            print('Could not send message. Is the SlackURL correct?')
+            logging.warning(f'Could not send message. Is the SlackURL correct? Message attempted to: {slackURL}')
 
 
 def main():
