@@ -71,7 +71,7 @@ service = create_service(client_secret_file,api_name,api_version,scopes)
 
 now = datetime.datetime.utcnow().isoformat() + 'Z'
 hour = datetime.datetime.utcnow()
-hour_added = datetime.timedelta(hours=1)
+hour_added = datetime.timedelta(minutes=59)
 hour_add = hour + hour_added
 day_added = datetime.timedelta(days=1)
 day_add = hour + day_added
