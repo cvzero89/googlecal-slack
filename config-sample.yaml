@@ -1,0 +1,29 @@
+team_1:
+    hourlyEvents:
+        slackURL: "https://hooks.slack.com/...."
+        calendarId: "primary" or calendarID.google.com
+        maxResults: bool
+        text: "Just some text"
+        exclude: "Excluding something?"
+
+    dailyEvents: 
+        slackURL: "https://hooks.slack.com/...."
+        calendarId: "primary" or calendarID.google.com
+        maxResults: bool
+        text: "Just some text"
+        exclude: "Excluding something?"
+
+team_2:
+    hourlyEvents:
+        slackURL: "https://hooks.slack.com/...."
+        calendarId: "primary" or calendarID.google.com
+        maxResults: bool
+        text: "Just some text"
+        exclude: "Excluding something?"
+
+    dailyEvents: 
+        slackURL: "https://hooks.slack.com/...."
+        calendarId: "primary" or calendarID.google.com
+        maxResults: bool
+        text: "Just some text"
+        exclude: "Excluding something?"

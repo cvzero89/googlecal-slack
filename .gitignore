@@ -1,0 +1,6 @@
+*.log
+*.json
+*.pickle
+venv/
+config.yaml
+__pycache__/

@@ -10,7 +10,7 @@ Move `credentials.json` to the script folder.
 First runs looks like:
 
 ```
-python3 calendarApp.py dailyEvents
+python3 calendarApp.py dailyEvents team
 Creating calendar service...
 Please visit this URL to authorize this application: https://accounts.google.com/o/oauth2/auth?response_type=code&client_id=-.......
 Received 1 events.
@@ -22,26 +22,13 @@ Your browser should open to authorize the app. If not, copy the link and open it
 Sample of configuration file:
 
 ```
-{
-	"hourlyEvents": [
-		{
-		"slackURL": "/url/for/your/incoming/webhook",
-		"calendarId": "calendarID from Google Calendar Settings",
-		"maxResults": false,
-		"text": "Text to display before listing events",
-		"exclude": "reGex to exclude events titles, separate with | if multiple strings"
-		}
-	],
-	"dailyEvents": [
-		{
-		"slackURL": "/url/for/your/incoming/webhook",
-		"calendarId": "calendarID from Google Calendar Settings",
-		"maxResults": false,
-		"text": "Text to display before listing events",
-		"exclude": "reGex to exclude events titles, separate with | if multiple strings"			
-		}
-	]
-}
+team:
+    type_of_event:
+        slackURL: "string"
+        calendarId: "string"
+        maxResults: bool
+        text: "string"
+        exclude: "string"
 ```
 
 `slackURL` can be created by following the steps on this link: https://api.slack.com/messaging/webhooks. <br>

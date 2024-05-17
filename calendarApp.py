@@ -11,28 +11,47 @@ import re
 import argparse
 from RFC3339 import RFC3339
 import logging
+import yaml
 
 logging.basicConfig(filename=f'{os.path.abspath(os.path.dirname(__file__))}/calendarApp.log', encoding='utf-8', level=logging.INFO, format='%(asctime)s %(message)s', datefmt='%d/%m/%Y %I:%M:%S %p')
 parser =  argparse.ArgumentParser(description='Get Google Calendar Events → POST to Slack channel.')
-parser.add_argument('frequency', help='Retrieve only events the next hour or 24 hours. Each service is configured at .config.json.', choices=['hourlyEvents', 'dailyEvents'])
+parser.add_argument('frequency', help='Retrieve only events the next hour or 24 hours. Each service is configured at config.yml.', choices=['hourlyEvents', 'dailyEvents'])
+parser.add_argument('team', help='Select the team calendar to use')
 args = parser.parse_args()
 frequency = args.frequency
+team = args.team
 
-client_secret_file = f'{os.path.abspath(os.path.dirname(__file__))}/calendarcredentials.json'
-api_name = 'calendar'
-api_version = 'v3'
-scopes = ['https://www.googleapis.com/auth/calendar']
+'''
+Loading config from config.yaml. The format should be:
 
-def load_config(frequency):
-    config = open(f'{os.path.abspath(os.path.dirname(__file__))}/.config.json')
+team:
+    type_of_event:
+        slackURL: "string"
+        calendarId: "string"
+        maxResults: bool
+        text: "string"
+        exclude: "string"
+'''
+
+def load_config(team, frequency):
     try:
-        config_file = json.load(config)
-        loaded_keys = list(config_file[frequency])
-        return loaded_keys
-    except ValueError as error_loading:
-        print(f'Error decoding JSON file!\n{error_loading}')
-        logging.debug(f'Malformed JSON file. Please check {config}.')
+        with open(f'{os.path.abspath(os.path.dirname(__file__))}/config.yaml') as config_file:
+            config = yaml.safe_load(config_file)
+    except FileNotFoundError:
+        print('Configuration file cannot be opened.')
+        logging.debug(f'No configuration file.')
         exit()
+    try:
+        team_config = config[team][frequency]
+        return team_config['slackURL'], team_config['calendarId'], team_config['maxResults'], team_config['text'], team_config['exclude']
+    except KeyError as error_loading:
+        print(f'Value not found at config file:\n{error_loading}')
+        logging.debug(f'Bad config file. Please check {config}.')
+        exit()
+
+'''
+Function to create the permissions to access the calendar. If the token is missing it will ask to complete sign-up via the browser.
+'''
 
 def create_service(client_secret_file, api_name, api_version, *scopes):
     print('Creating calendar service...')
@@ -67,16 +86,12 @@ def create_service(client_secret_file, api_name, api_version, *scopes):
         print(e)
         logging.debug(f'Error creating calendar service: {e}')
         return None
-service = create_service(client_secret_file,api_name,api_version,scopes)
 
-now = datetime.datetime.utcnow().isoformat() + 'Z'
-hour = datetime.datetime.utcnow()
-hour_added = datetime.timedelta(hours=1)
-hour_add = hour + hour_added
-day_added = datetime.timedelta(days=1)
-day_add = hour + day_added
-
-def generate_message(events, text, exclude_list):
+'''
+Receives the events from the calendar and parses them into a single message to post to Slack as a block.
+Can exclude events titles based on RegEx. If exclude is empty it will not exclude anything.
+'''
+def generate_message(events, text, exclude):
     blocks = [{
         "type": "section",
         "text": {
@@ -86,11 +101,6 @@ def generate_message(events, text, exclude_list):
     }]
     for event in events:
         title = event['summary']
-        exclude_regex = re.compile(exclude_list)
-        result = exclude_regex.match(title)
-        if result:
-            logging.info('Excluded events based on set RegEx.')
-            continue
         event_url = event['htmlLink']
         start = event['start'].get('dateTime', event['start'].get('date'))
         convert = RFC3339()
@@ -115,51 +125,86 @@ def generate_message(events, text, exclude_list):
         "blocks": blocks
     }
 
-
-def get_events(loaded_config, max_time):
-    calendarId = loaded_config[0]['calendarId']
-    text = loaded_config[0]['text']
-    if loaded_config[0]['maxResults'] == False:
+'''
+Getting the events from the calendar, the ID is defined on config.yaml.
+max_time is fixed to hourly or daily depending on the input to the script.
+'''
+def get_events(calendarId, text, maxResults, exclude, max_time, now, service):
+    if maxResults == False:
         max_results = None
     else:
-        max_results = loaded_config[0]['maxResults']
+        max_results = maxResults
     events_list = service.events().list(calendarId=calendarId, timeMin=now, timeMax=max_time, maxResults=max_results, singleEvents=True, orderBy='startTime').execute()
     events = events_list.get('items',[])
-    exclude_list = loaded_config[0]['exclude']
+    print(f'Received {len(events)} events.')
+    logging.info(f'Received {len(events)} events.')
+    for event in events:
+        current_item = 0
+        title = event['summary']
+        exclude_regex = re.compile(exclude)
+        result = exclude_regex.match(title)
+        if result:
+            logging.info('Excluded events based on set RegEx.')
+            events.pop(current_item)
+            print(events)
+        current_item += 1
     if not events:
         logging.info('Could not retrieve events or there are no events at this time.')
         return None
-    else:
-        print(f'Received {len(events)} events.')
-        logging.info(f'Received {len(events)} events.')
-    return generate_message(events, text, exclude_list)
+    return generate_message(events, text, exclude)
+
+'''
+Sending the events to the webhook set at config.yaml.
+The hook URL must be created at the Slack App configuration at https://api.slack.com/apps/.
+'''
 
 def send_command(message, slackURL):
     if message == None:
         print('No upcoming events found.')
     else:
-        send = requests.post(slackURL, json=message)
-        if send.status_code != 200:
-            raise ValueError(f'Request to Slack returned an error {send.status_code}, the response is:\n{send.text}')
-        else:
-            logging.info(f'Message sent. HTTP code: {send.status_code}.')
-            print(f'Message sent. Server response: {send.text}') 
+        try:
+            send = requests.post(slackURL, json=message)
+            if send.status_code != 200:
+                raise ValueError(f'Request to Slack returned an error {send.status_code}, the response is:\n{send.text}')
+            else:
+                logging.info(f'Message sent. HTTP code: {send.status_code}.')
+                print(f'Message sent. Server response: {send.text}')
+        except:
+            print('Could not send message. Is the SlackURL correct?')
+            logging.warning(f'Could not send message. Is the SlackURL correct? Message attempted to: {slackURL}')
 
 
 def main():
     logging.info('Started!')
+    '''
+    Info to set the calendar credentials:
+    '''
+    client_secret_file = f'{os.path.abspath(os.path.dirname(__file__))}/calendarcredentials.json'
+    api_name = 'calendar'
+    api_version = 'v3'
+    scopes = ['https://www.googleapis.com/auth/calendar']
+    service = create_service(client_secret_file,api_name,api_version,scopes)
+
+    '''
+    Getting the current time and time delta to receive events.
+    '''
+    now = datetime.datetime.utcnow().isoformat() + 'Z'
+    hour = datetime.datetime.utcnow()
+    hour_added = datetime.timedelta(minutes=59)
+    hour_add = hour + hour_added
+    day_added = datetime.timedelta(days=1)
+    day_add = hour + day_added
+
     if frequency == 'hourlyEvents':
-        loaded_config = load_config(frequency)
-        slackURL = loaded_config[0]['slackURL']
+        slackURL, calendarId, maxResults, text, exclude = load_config(team, frequency)
         max_time = hour_add.isoformat() + 'Z'
-        message = get_events(loaded_config, max_time)
-        send_command(message, slackURL)
+
     elif frequency == 'dailyEvents':
-        loaded_config = load_config(frequency)
+        slackURL, calendarId, maxResults, text, exclude = load_config(team, frequency)
         max_time = day_add.isoformat() + 'Z'
-        slackURL = loaded_config[0]['slackURL']
-        message = get_events(loaded_config, max_time)
-        send_command(message, slackURL)
+
+    message = get_events(calendarId, text, maxResults, exclude, max_time, now, service)
+    send_command(message, slackURL)
 
 
 if __name__ == "__main__":
