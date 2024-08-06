@@ -5,8 +5,8 @@ from apiclient.discovery import build
 from google_auth_oauthlib.flow import Flow, InstalledAppFlow
 from google.auth.transport.requests import Request
 import datetime
+from dateutil.parser import parse as parse_date
 import requests
-import json
 import re
 import argparse
 from RFC3339 import RFC3339
@@ -99,17 +99,18 @@ def generate_message(events, text, exclude):
             "text": f'{text}'
         }
     }]
+    convert = RFC3339()
     for event in events:
         title = event['summary']
         event_url = event['htmlLink']
         start = event['start'].get('dateTime', event['start'].get('date'))
-        convert = RFC3339()
+        
         converted_time = convert.extract_datetime(start) 
-        blocks.append({
+        event_block = {
             "type": "section",
             "text": {
                 "type": "mrkdwn",
-                "text": f"*{title}* at {converted_time.strftime('%m/%d/%Y, %H:%M:%S')}"
+                "text": f"*{title}* at {converted_time.strftime('%m/%d/%Y - %H:%M:%S')}"
             },
             "accessory": {
                 "type": "button",
@@ -119,8 +120,21 @@ def generate_message(events, text, exclude):
                 },
                 "url": event_url
             }
-        })
-
+        }
+        blocks.append(event_block)
+        try:
+            if event['description']:
+                description = event['description']
+                description_block = {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": f"```{description}```"
+                    }
+                }
+                blocks.append(description_block)
+        except KeyError:
+            print('No description added.')
     return {
         "blocks": blocks
     }
@@ -129,7 +143,7 @@ def generate_message(events, text, exclude):
 Getting the events from the calendar, the ID is defined on config.yaml.
 max_time is fixed to hourly or daily depending on the input to the script.
 '''
-def get_events(calendarId, text, maxResults, exclude, max_time, now, service):
+def get_events(calendarId, text, maxResults, exclude, max_time, now, service, frequency):
     if maxResults == False:
         max_results = None
     else:
@@ -141,17 +155,31 @@ def get_events(calendarId, text, maxResults, exclude, max_time, now, service):
     for event in events:
         current_item = 0
         title = event['summary']
-        exclude_regex = re.compile(exclude)
-        result = exclude_regex.match(title)
-        if result:
-            logging.info('Excluded events based on set RegEx.')
+        if exclude:
+            exclude_regex = re.compile(exclude)
+            result = exclude_regex.match(title)
+            if result:
+                logging.info(f'Excluded events: {title} based on set RegEx.')
+                events.pop(current_item)
+        if is_event_past_one_hour(event):
             events.pop(current_item)
-            print(events)
+            logging.info(f'Event removed: {title}, started more than 1 hour ago.')
         current_item += 1
     if not events:
         logging.info('Could not retrieve events or there are no events at this time.')
         return None
     return generate_message(events, text, exclude)
+
+'''
+Remove events if they have started more than 1 hour ago to avoid pinging the room twice with the same info for long events.
+Date is converted to UTC to be able to use any timezone from GoogleCal.
+'''
+def is_event_past_one_hour(event):
+    start_time_str = event['start'].get('dateTime', event['start'].get('date'))
+    start_time = datetime.datetime.fromisoformat(start_time_str).astimezone(datetime.timezone.utc)
+    current_time = datetime.datetime.now(datetime.timezone.utc)
+    time_diff = current_time - start_time
+    return time_diff.total_seconds() > 3600
 
 '''
 Sending the events to the webhook set at config.yaml.
@@ -171,6 +199,7 @@ def send_command(message, slackURL):
                 print(f'Message sent. Server response: {send.text}')
         except:
             print('Could not send message. Is the SlackURL correct?')
+            logging.warning(f'Message failed: {send.text}.')
             logging.warning(f'Could not send message. Is the SlackURL correct? Message attempted to: {slackURL}')
 
 
@@ -203,7 +232,7 @@ def main():
         slackURL, calendarId, maxResults, text, exclude = load_config(team, frequency)
         max_time = day_add.isoformat() + 'Z'
 
-    message = get_events(calendarId, text, maxResults, exclude, max_time, now, service)
+    message = get_events(calendarId, text, maxResults, exclude, max_time, now, service, frequency)
     send_command(message, slackURL)
 
 

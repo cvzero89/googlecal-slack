@@ -3,6 +3,8 @@ Retrieve events from Google Calendar and post to a Slack channel.
 
 ![alt text](https://github.com/cvzero89/googlecal-slack/blob/master/calendarApp.jpg)
 
+It supports showing event titles, description and a link to the calendar event.
+
 Follow the steps from: https://developers.google.com/calendar/api/quickstart/python making sure to activate the Google Calendar API and that you will need to publish the app for Google to trust it.
 
 Move `credentials.json` to the script folder.
