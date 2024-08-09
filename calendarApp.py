@@ -152,25 +152,25 @@ def get_events(calendarId, text, maxResults, exclude, max_time, now, service):
         max_results = maxResults
     events_list = service.events().list(calendarId=calendarId, timeMin=now, timeMax=max_time, maxResults=max_results, singleEvents=True, orderBy='startTime').execute()
     events = events_list.get('items',[])
+    filtered_events = []
     print(f'Received {len(events)} events.')
     logging.info(f'Received {len(events)} events.')
     for event in events:
-        current_item = 0
         title = event['summary']
         if exclude:
             exclude_regex = re.compile(exclude)
             result = exclude_regex.match(title)
             if result:
                 logging.info(f'Excluded events: {title} based on set RegEx.')
-                events.pop(current_item)
+                continue
         if is_event_past_one_hour(event):
-            events.pop(current_item)
             logging.info(f'Event removed: {title}, started more than 1 hour ago.')
-        current_item += 1
-    if not events:
+            continue
+        filtered_events.append(event)
+    if not filtered_events:
         logging.info('Could not retrieve events or there are no events at this time.')
         return None
-    return generate_message(events, text, exclude)
+    return generate_message(filtered_events, text, exclude)
 
 '''
 Remove events if they have started more than 1 hour ago to avoid pinging the room twice with the same info for long events.
