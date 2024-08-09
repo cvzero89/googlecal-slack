@@ -5,12 +5,12 @@ from apiclient.discovery import build
 from google_auth_oauthlib.flow import Flow, InstalledAppFlow
 from google.auth.transport.requests import Request
 import datetime
-from dateutil.parser import parse as parse_date
 import requests
 import re
 import argparse
 from RFC3339 import RFC3339
 import logging
+import re
 import yaml
 
 logging.basicConfig(filename=f'{os.path.abspath(os.path.dirname(__file__))}/calendarApp.log', encoding='utf-8', level=logging.INFO, format='%(asctime)s %(message)s', datefmt='%d/%m/%Y %I:%M:%S %p')
@@ -110,7 +110,7 @@ def generate_message(events, text, exclude):
             "type": "section",
             "text": {
                 "type": "mrkdwn",
-                "text": f"*{title}* at {converted_time.strftime('%m/%d/%Y - %H:%M:%S')}"
+                "text": f"*Event*: _*{title}*_ at {converted_time.strftime('%m/%d/%Y - %H:%M:%S')}"
             },
             "accessory": {
                 "type": "button",
@@ -125,11 +125,13 @@ def generate_message(events, text, exclude):
         try:
             if event['description']:
                 description = event['description']
+                description = description.replace('<br>', ' ')
+                description = re.sub(r'<[^>]*>', '', description)
                 description_block = {
                     "type": "section",
                     "text": {
                         "type": "mrkdwn",
-                        "text": f"```{description}```"
+                        "text": f"*Details*: _{description}_"
                     }
                 }
                 blocks.append(description_block)
@@ -143,7 +145,7 @@ def generate_message(events, text, exclude):
 Getting the events from the calendar, the ID is defined on config.yaml.
 max_time is fixed to hourly or daily depending on the input to the script.
 '''
-def get_events(calendarId, text, maxResults, exclude, max_time, now, service, frequency):
+def get_events(calendarId, text, maxResults, exclude, max_time, now, service):
     if maxResults == False:
         max_results = None
     else:
@@ -232,7 +234,7 @@ def main():
         slackURL, calendarId, maxResults, text, exclude = load_config(team, frequency)
         max_time = day_add.isoformat() + 'Z'
 
-    message = get_events(calendarId, text, maxResults, exclude, max_time, now, service, frequency)
+    message = get_events(calendarId, text, maxResults, exclude, max_time, now, service)
     send_command(message, slackURL)
 
 
