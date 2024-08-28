@@ -101,7 +101,7 @@ def generate_message(events, text, exclude):
     }]
     convert = RFC3339()
     for event in events:
-        title = event['summary']
+        title = event['summary'].strip().replace('\n', ' ')
         event_url = event['htmlLink']
         start = event['start'].get('dateTime', event['start'].get('date'))
         
@@ -125,13 +125,14 @@ def generate_message(events, text, exclude):
         try:
             if event['description']:
                 description = event['description']
-                description = description.replace('<br>', ' ')
+                description = description.replace('<br>', ' ').strip().replace('\n', ' ')
                 description = re.sub(r'<[^>]*>', '', description)
+                description = re.sub("\s\s+", " ", description)
                 description_block = {
                     "type": "section",
                     "text": {
                         "type": "mrkdwn",
-                        "text": f"*Details*: _{description}_"
+                        "text": f"*Details*: {description}",
                     }
                 }
                 blocks.append(description_block)
